@@ -1,0 +1,115 @@
+{% if freeradius3_sites_default is defined %}
+{% for vserver in freeradius3_sites_default %}
+
+{% if vserver.name is defined %}
+server {{ vserver.name }} {
+
+{% if vserver.listen is defined %}
+{% for listen in vserver.listen %}
+                              listen {
+{% for key, value in listen.items() %}
+{% if value is mapping %}
+                                          {{ key }} {
+{% for k, v in value.items() %}
+                                            {{ k }} = {{ v }}
+{% endfor %}
+                                          }
+{% else %}
+                                          {{ key }} = {{ value }}
+{% endif %}
+{% endfor %}
+                              }
+{% endfor %}
+{% endif %}
+
+{% if vserver.authorize is defined %}
+                             authorize {
+{% for authorize in vserver.authorize %}
+
+{% if authorize is mapping %}
+{% for key, val in authorize.items() %}
+                                          {{ key }} {
+{% for k, v in val.items() %}
+                                             {{ k }} = {{ v }}
+{% endfor %}
+                                          }
+{% endfor %}
+{% else %}
+                                          {{ authorize }}
+{% endif %}
+{% endfor %}
+                            }
+{% endif %}
+
+{% if vserver.authenticate is defined %}
+                              authenticate {
+{% for item in vserver.authenticate %}
+{% if item.auth_type is defined %}
+{% for auth_type in item.auth_type %}
+                                                Auth-Type {{ auth_type.name }} {
+                                                    {{ auth_type.module }}
+                                                }
+{% endfor %}
+{% else %}
+                                                {{ item }}
+{% endif %}
+{% endfor %}
+                              }
+{% endif %}
+
+{% if vserver.preacct is defined %}
+                              preacct {
+{% for item in vserver.preacct %}
+                                                {{ item }}
+{% endfor %}
+                              }
+{% endif %}
+
+{% if vserver.accounting is defined %}
+                              accounting {
+{% for item in vserver.accounting %}
+                                                {{ item }}
+{% endfor %}
+                              }
+{% endif %}
+
+{% if vserver.session is defined %}
+                              session {
+{% for item in vserver.session %}
+                                                {{ item }}
+{% endfor %}
+                              }
+{% endif %}
+
+{% if vserver.post_auth is defined %}
+                                post-auth {
+{% for item in vserver.post_auth %}
+{% if item.template_content is defined %}
+{{ item.template_content }}
+{% endif %}
+
+{% endfor %}
+                                }
+{% endif %}
+
+{% if vserver.pre_proxy is defined %}
+                              pre-proxy {
+{% for item in vserver.pre_proxy %}
+                                                {{ item }}
+{% endfor %}
+                              }
+{% endif %}
+
+{% if vserver.post_proxy is defined %}
+                              post-proxy {
+{% for item in vserver.post_proxy %}
+                                                {{ item }}
+{% endfor %}
+                              }
+{% endif %}
+
+{% endif %}
+}
+
+{% endfor %}
+{% endif %}

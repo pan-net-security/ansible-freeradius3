@@ -1,0 +1,209 @@
+---
+# tasks file for ansible-freeradius-generic
+
+- name: Add freeradius repo for Ubuntu 16.04
+  become: yes
+  apt_repository:
+    repo: "{{ freeradius3_repo }}"
+    state: present
+  when: ansible_distribution_version == '16.04'
+
+- name: Install freeradius package for Ubuntu 16.04
+  become: yes
+  apt:
+    name: freeradius
+    state: latest
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_distribution_version == '16.04'
+
+- name: Install freeradius package for Ubuntu 18.04
+  become: yes
+  apt:
+    name: "freeradius={{ freeradius3_version }}"
+    update_cache: yes
+    cache_valid_time: 3600
+  when: ansible_distribution_version == '18.04'
+
+# required by the freeradius-ldap module
+- name: start freeradius
+  become: yes
+  service:
+    name: freeradius
+    state: started
+    enabled: yes
+    use: service
+  ignore_errors: yes # if the config is wrong, later tasks can fix it
+
+- name: Install freeradius modules
+  become: yes
+  apt:
+    name: "{{ freeradius3_plugins }}"
+    state: latest
+    update_cache: yes
+    cache_valid_time: 3600
+
+- name: Create Freeradius users configuration file
+  become: yes
+  template:
+    src: "etc/freeradius/mods-config/files/authorize.j2"
+    dest: "/etc/freeradius{{ item }}/mods-config/files/authorize"
+    owner: root
+    group: freerad
+    mode: 0640
+  notify:
+    - restart freeradius
+  with_items:
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+
+- name: Create custom dictionary
+  become: yes
+  template:
+    src: "etc/freeradius/dictionary.j2"
+    dest: "/etc/freeradius{{ item }}/dictionary"
+    owner: root
+    group: freerad
+    mode: 0640
+  notify:
+    - restart freeradius
+  with_items:
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+
+- name: Create Freeradius radiusd.conf configuration file
+  become: yes
+  template:
+    src: "etc/freeradius/radiusd.conf.j2"
+    dest: "/etc/freeradius{{ item }}/radiusd.conf"
+    owner: root
+    group: freerad
+    mode: 0640
+  notify:
+    - restart freeradius
+  with_items:
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+
+- name: Create Freeradius clients configuration file
+  become: yes
+  template:
+    src: etc/freeradius/clients.conf.j2
+    dest: /etc/freeradius{{ item }}/clients.conf
+    owner: root
+    group: freerad
+    mode: 0640
+  notify:
+    - restart freeradius
+  with_items:
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+
+- name: Clean FreeRADIUS mods-enabled directory
+  become: yes
+  file:
+    state: "{{ item[0] }}"
+    path: "/etc/freeradius{{ item[1] }}/mods-enabled/"
+  with_nested:
+    - ['absent', 'directory']
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+
+- name: Create perl module configuration file
+  become: yes
+  template:
+    src: "etc/freeradius/mods-available/perl.j2"
+    dest: "/etc/freeradius{{ item }}/mods-available/perl"
+    owner: root
+    group: freerad
+    mode: 0640
+  with_items:
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+  notify:
+    - restart freeradius
+  when: "'perl' in freeradius3_mods_enabled"
+
+- name: Create ldap module configuration file
+  become: yes
+  template:
+    src: "etc/freeradius/mods-available/ldap.j2"
+    dest: "/etc/freeradius{{ item }}/mods-available/ldap"
+    owner: root
+    group: freerad
+    mode: 0640
+  with_items:
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+  notify:
+    - restart freeradius
+  when: "'ldap' in freeradius3_mods_enabled"
+
+- name: Create cache module configuration file
+  become: yes
+  template:
+    src: "etc/freeradius/mods-available/cache.j2"
+    dest: "/etc/freeradius{{ item }}/mods-available/cache"
+    owner: root
+    group: freerad
+    mode: 0640
+  with_items:
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+  notify:
+    - restart freeradius
+  when: "'cache' in freeradius3_mods_enabled"
+
+- name: Create rest module configuration file
+  become: yes
+  template:
+    src: "etc/freeradius/mods-available/rest.j2"
+    dest: "/etc/freeradius{{ item }}/mods-available/rest"
+    owner: root
+    group: freerad
+    mode: 0640
+  with_items:
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+  notify:
+    - restart freeradius
+  when: "'rest' in freeradius3_mods_enabled"
+
+- name: Link FreeRADIUS mods-enabled
+  become: yes
+  file:
+    src: "/etc/freeradius{{ item[1] }}/mods-available/{{ item[0] }}"
+    dest: "/etc/freeradius{{ item[1] }}/mods-enabled/{{ item[0] }}"
+    owner: root
+    group: root
+    state: link
+  with_nested:
+    - "{{ freeradius3_mods_enabled }}"
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+
+- name: Remove sites-enabled links
+  become: yes
+  file:
+    path: "/etc/freeradius{{ item[1] }}/sites-enabled/{{ item[0] }}"
+    state: absent
+  with_nested:
+    - "inner-tunnel"
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+
+- name: Create Freeradius enabled sites configuration file
+  become: yes
+  template:
+    src: "etc/freeradius/sites-enabled/default.j2"
+    dest: "/etc/freeradius{{ item }}/sites-enabled/default"
+    owner: root
+    group: freerad
+    mode: 0644
+  with_items:
+    - "{{ '/3.0' if ansible_distribution_version == '18.04' else '/' }}"
+  notify:
+    - restart freeradius
+
+- name: Set radius.log directory permission
+  file:
+    path: /var/log/freeradius
+    state: directory
+    mode: "u+rwx,g+rx,o+x"
+
+- name: Ensure FreeRADIUS service is started and enabled on boot
+  become: yes
+  service:
+    name: freeradius
+    state: started
+    enabled: yes
+    use: service

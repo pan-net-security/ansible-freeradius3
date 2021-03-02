@@ -1,0 +1,8 @@
+---
+# handlers file for ansible-freeradius-generic
+- name: restart freeradius
+  become: yes
+  service:
+    name: "{{ freeradius3_service_name }}"
+    state: restarted
+  tags: [freeradius]

@@ -1,0 +1,7 @@
+{% if freeradius3_users is defined %}
+{% for user in freeradius3_users %}
+{% if user.template_content is defined %}
+{{ user.template_content }}
+{% endif %}
+{% endfor %}
+{% endif %}

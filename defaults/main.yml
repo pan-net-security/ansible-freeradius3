@@ -1,0 +1,227 @@
+---
+# default variables
+
+# FreeRADIUS 3.0.15 build by role author
+freeradius3_repo: "ppa:viralpoetry/freeradius3"
+freeradius3_version: "3.0.16+dfsg-1ubuntu3"
+
+# will be used if perl mod is enable in the freeradius3_mods_enabled variable
+freeradius_perl_module_path: "{% raw %}${modconfdir}/${.:instance}/privacyidea.pl{% endraw %}"
+
+freeradius3_plugins:
+   - freeradius-common
+   - freeradius-krb5
+   - freeradius-ldap
+   - freeradius-utils
+   - freeradius-rest
+
+# default mods enabled after FreeRADIUS installation
+freeradius3_mods_enabled: [
+      always, chap, detail.log, eap, expiration, linelog, ntlm_auth, preprocess, replicate, unix,
+      attr_filter, date, digest, echo, expr, logintime, pap, radutmp, soh, unpack,
+      cache_eap, detail, dynamic_clients, exec, files, mschap, passwd, realm, sradutmp, utf8
+    ]
+
+# custom dictionary
+# freeradius3_dictionary: |
+#   VENDOR       huawei             2011
+#   ATTRIBUTE    HW-Exec-Privilege            29    integer
+
+### LDAP ####
+# This variables should cover most LDAP use cases, no need to edit ldap template
+# disabled by default, to enable, include ldap to the freeradius3_mods_enabled
+freeradius3_ldap_modules:
+    - name: default_ldap
+      ldap_debug: '0x0028' # for basic debug, set 0x0028, for full debug 0xFFFF
+      ldap_server: 'localhost'
+      ldap_port: 389
+      ldap_identity: 'cn=admin,dc=example,dc=org'
+      ldap_pass: 'pass'
+      ldap_basedn: 'dc=example,dc=org'
+      user_basedn: "{% raw %}${..base_dn}{% endraw %}"
+      user_filter: "{% raw %}(uid=%{%{Stripped-User-Name}:-%{User-Name}}){% endraw %}"
+      client_basedn: "{% raw %}${..base_dn}{% endraw %}"
+      client_filter: '(objectClass=radiusClient)'
+      group_basedn: "{% raw %}${..base_dn}{% endraw %}"
+      group_filter: "{% raw %}(objectClass=posixGroup){% endraw %}"
+      group_membership_filter: "{% raw %}(|(member=%{control:Ldap-UserDn})(memberUid=%{%{Stripped-User-Name}:-%{User-Name}})){% endraw %}"
+      group_membership_attribute: 'memberOf'
+      group_name_attribute: cn
+      group_cacheable_name: 'no'
+      group_cacheable_dn: 'no'
+      ldap_tls_enable: false # disabled by default
+      ldap_tls:
+          ca_file: /path/to/cacert.crt
+          #ca_path  = ${certdir} # there is bug in gnutls
+          certificate_file: /path/to/radius.crt
+          private_key_file: /path/to/radius.key
+          random_file: /dev/urandom
+          require_cert: 'demand'
+
+# mod cache
+# freeradius3_cache_attributes: >
+#       {% raw %}&control:iam_ldap_pnb-Ldap-Group += &control:iam_ldap_pnb-Ldap-Group[*]{% endraw %}
+
+### USERS ####
+freeradius3_users:
+  - template_content: >
+      # DEFAULT Auth-Type := rest
+
+### radiusd logs ###
+freeradius3_radiusd_log:
+    destination: "files"
+    colourise: "yes"
+    file: >
+        {% raw %}${logdir}/radius.log{% endraw %}
+    syslog_facility: "daemon"
+    stripped_names: "no"
+    auth: "yes"           #  Log auth requests
+    auth_badpass:  "no"   #  Log passwords with the authentication requests.
+    auth_goodpass: "no"   #  Log passwords with the authentication requests.
+
+
+# default
+freeradius3_sites_default:
+  - name: default
+    listen:
+      - ipaddr: "*"
+        port: 0
+        type: auth
+        limit:
+          lifetime: 0
+          idle_timeout: 30
+      - ipaddr: "*"
+        port: 0
+        type: acct
+      - ipv6addr: "::"
+        port: 0
+        type: auth
+        limit:
+          max_connections: 16
+          lifetime: 0
+          idle_timeout: 30
+      - ipv6addr: "::"
+        port: 0
+        type: acct
+    authorize:
+      - filter_username
+      - preprocess
+      - chap
+      - mschap
+      - digest
+      - suffix
+      - eap:
+          ok: return
+      - files
+      - -sql
+      - -ldap
+      - expiration
+      - logintime
+      - pap
+    authenticate:
+       - auth_type:
+           - name: PAP
+             module: pap
+       - auth_type:
+           - name: CHAP
+             module: chap
+       - auth_type:
+           - name: MS-CHAP
+             module: mschap
+       - mschap
+       - digest
+       - eap
+    preacct:
+       - preprocess
+       - acct_unique
+       - suffix
+       - files
+    accounting:
+       - detail
+       - unix
+       - -sql
+       - exec
+       - attr_filter.accounting_response
+    post_auth:
+       - template_content: >
+           update {
+             &reply: += &session-state:
+           }
+
+           -sql
+
+           exec
+
+           remove_reply_message_if_eap
+
+           Post-Auth-Type REJECT {
+
+             -sql
+             attr_filter.access_reject
+
+             eap
+
+             remove_reply_message_if_eap
+           }
+    pre_proxy:
+       - ""
+    post_proxy:
+       - eap
+
+
+freeradius3_clients:
+ - shortname: localhost
+   ipaddr: 127.0.0.1
+   proto: '*'
+   secret: testing123
+   require_message_authenticator: "no"
+   nas_type: other
+   limit:
+       max_connections: 16
+       lifetime: 0
+       idle_timeout: 30
+ - shortname: localhost_ipv6
+   ipv6addr: ::1
+   secret: testing123
+
+# to enable rest module, include it also to the freeradius3_mods_enabled
+### rlm_rest ###
+freeradius3_rest:
+    - tls:
+        ca_file: "${certdir}/cacert.pem"
+        ca_path: "${certdir}"
+        certificate_file: "/path/to/radius.crt"
+        private_key_file: "/path/to/radius.key"
+        private_key_password: "supersecret"
+        random_file: "/dev/urandom"
+        check_cert: "yes"
+        check_cert_cn: "yes"
+    - connect_uri: "http://127.0.0.1/"
+    - authorize:
+        uri: '{% raw %}"${..connect_uri}/user/%{User-Name}/mac/%{Called-Station-ID}?action=authorize"{% endraw %}'
+        method: "'get'"
+        tls: "{% raw %}${..tls}{% endraw %}"
+    - authenticate:
+        uri: '{% raw %}"${..connect_uri}/validate/radiuscheck"{% endraw %}'
+        method: "'post'"
+        body: "'post'"
+        data: '{% raw %}"user=%{urlquote:%{User-Name}}&pass=%{urlquote:%{User-Password}}"{% endraw %}'
+        force_to: "'plain'"
+        tls: "{% raw %}${..tls}{% endraw %}"
+    - accounting:
+        uri: '{% raw %}"${..connect_uri}/user/%{User-Name}/sessions/%{Acct-Unique-Session-ID}"{% endraw %}'
+        method: "'post'"
+        tls: "{% raw %}${..tls}{% endraw %}"
+    - post_auth:
+        uri: '{% raw %}"${..connect_uri}/user/%{User-Name}/mac/%{Called-Station-ID}?action=post-auth"{% endraw %}'
+        method: "'post'"
+        tls: "{% raw %}${..tls}{% endraw %}"
+    - pool:
+        start: "{% raw %}${thread[pool].start_servers}{% endraw %}"
+        min: "{% raw %}${thread[pool].min_spare_servers}{% endraw %}"
+        max: "{% raw %}${thread[pool].max_servers}{% endraw %}"
+        spare: "{% raw %}${thread[pool].max_spare_servers}{% endraw %}"
+        uses: 0
+        retry_delay: 30
+        lifetime: 0
+        idle_timeout: 60

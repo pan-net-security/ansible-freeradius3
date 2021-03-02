@@ -1,0 +1,6 @@
+---
+# vars file for ansible-freeradius-generic
+freeradius3_packages:
+  - freeradius
+
+freeradius3_service_name: freeradius

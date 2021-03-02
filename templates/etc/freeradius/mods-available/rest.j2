@@ -1,0 +1,19 @@
+{% if freeradius3_rest is defined %}
+rest {
+{% for rest_item in freeradius3_rest %}
+
+{% for key, value in rest_item.items() %}
+{% if value is mapping %}
+                                          {{ key }} {
+{% for k, v in value.items() %}
+                                              {{ k }} = {{ v }}
+{% endfor %}
+                                          }
+{% else %}
+                                          {{ key }} = {{ value }}
+{% endif %}
+{% endfor %}
+
+{% endfor %}
+}
+{% endif %}

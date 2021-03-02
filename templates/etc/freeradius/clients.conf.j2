@@ -1,0 +1,21 @@
+{% if freeradius3_clients is defined %}
+{% for item in freeradius3_clients %}
+{% if item.shortname is defined %}
+client {{ item.shortname }} {
+{% for key, value in item.iteritems()  if not (key == "shortname") %}
+{% if value is mapping %}
+    {{ key }} {
+{% for k, v in value.iteritems() | sort %}
+        {{ k }} = {{ v }}
+{% endfor %}
+    }
+{% else %}
+    {{ key }} = {{ value }}
+{% endif %}
+{% endfor %}
+
+}
+{% endif %}
+
+{% endfor %}
+{% endif %}

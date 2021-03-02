@@ -1,0 +1,187 @@
+ldap_module.# if you want to add Ansible variables to this template, check for the "raw", "endraw" so you will know whether the variable will be rendered
+
+{% if freeradius3_ldap_modules is defined %}
+
+{% for ldap_module in freeradius3_ldap_modules %}
+
+ldap {{ ldap_module.name }} {
+    server = '{{ ldap_module.ldap_server }}'
+    port = {{ ldap_module.ldap_port }}
+    identity = '{{ ldap_module.ldap_identity }}'
+    password = '{{ ldap_module.ldap_pass }}'
+    base_dn = '{{ ldap_module.ldap_basedn }}'
+
+    sasl {
+    }
+
+    update {
+      #control:Password-With-Header  += 'userPassword'
+      #control:      += 'radiusControlAttribute'
+      #request:      += 'radiusRequestAttribute'
+      #reply:        += 'radiusReplyAttribute'
+      request:User-Profile            := 'description'
+    }
+
+    #  Set to yes if you want to bind as the user after retrieving the
+    #  Cleartext-Password. This will consume the login grace, and
+    #  verify user authorization.
+    #edir_autz = no
+
+    #  Note: set_auth_type was removed in v3.x.x
+    #  Equivalent functionality can be achieved by adding the following
+    #  stanza to the authorize {} section of your virtual server.
+    #
+    #    ldap
+    #    if ((ok || updated) && User-Password) {
+    #        update {
+    #            control:Auth-Type := ldap
+    #        }
+    #    }
+    #
+    user {
+      base_dn = "{{ ldap_module.user_basedn }}"
+      filter = "{{ ldap_module.user_filter }}"
+      scope = 'sub'
+      sasl {
+        # SASL mechanism
+  #      mech = 'PLAIN'
+
+        # SASL authorisation identity to proxy.
+  #      proxy = &User-Name
+
+        # SASL realm. Used for kerberos.
+  #      realm = 'example.org'
+      }
+    }
+    #  User membership checking.
+    group {
+      #  Where to start searching in the tree for groups
+      base_dn = "{{ ldap_module.group_basedn }}"
+
+      #  Filter for group objects, should match all available
+      #  group objects a user might be a member of.
+      filter = '{{ ldap_module.group_filter }}'
+      #scope = 'sub'
+      name_attribute = '{{ ldap_module.group_name_attribute }}'
+      membership_filter = "{{ ldap_module.group_membership_filter }}"
+      membership_attribute = '{{ ldap_module.group_membership_attribute }}'
+      # cacheable_name = 'no'
+      # cacheable_dn = 'no'
+      cacheable_name = '{{ ldap_module.group_cacheable_name }}'
+      cacheable_dn = '{{ ldap_module.group_cacheable_dn }}'
+      #  Override the normal cache attribute (<inst>-LDAP-Group or
+      #  LDAP-Group if using the default instance) and create a
+      #  custom attribute.  This can help if multiple module instances
+      #  are used in fail-over.
+  #    cache_attribute = 'LDAP-Cached-Membership'
+    }
+    profile {
+    }
+
+    client {
+      base_dn = "{{ ldap_module.client_basedn }}"
+      filter = '{{ ldap_module.client_filter }}'
+      template {
+  #      login        = 'test'
+  #      password      = 'test'
+  #      proto         = tcp
+  #      require_message_authenticator  = yes
+
+        # Uncomment to add a home_server with the same
+        # attributes as the client.
+  #      coa_server {
+  #        response_window = 2.0
+  #      }
+      }
+      attribute {
+        ipaddr        = 'radiusClientIdentifier'
+        secret        = 'radiusClientSecret'
+  #      shortname      = 'radiusClientShortname'
+  #      nas_type      = 'radiusClientType'
+  #      virtual_server      = 'radiusClientVirtualServer'
+  #      require_message_authenticator  = 'radiusClientRequireMa'
+      }
+    }
+    accounting {
+      reference = {% raw %}"%{tolower:type.%{Acct-Status-Type}}"{% endraw %}
+
+      type {
+        start {
+          update {
+            description := "Online at %S"
+          }
+        }
+        interim-update {
+          update {
+            description := "Last seen at %S"
+          }
+        }
+        stop {
+          update {
+            description := "Offline at %S"
+          }
+        }
+      }
+    }
+    #
+    #  Post-Auth can modify LDAP objects too
+    #
+    post-auth {
+      update {
+        description := "Authenticated at %S"
+      }
+    }
+
+    #  LDAP connection-specific options.
+    options {
+      chase_referrals = yes
+      rebind = yes
+      res_timeout = 10
+      srv_timelimit = 3
+      net_timeout = 1
+      idle = 60
+      probes = 3
+      interval = 3
+      #  default: 0x0000 (no debugging messages)
+      #  Example:(LDAP_DEBUG_FILTER+LDAP_DEBUG_CONNS)
+      ldap_debug = '{{ ldap_module.ldap_debug }}'
+    }
+
+    tls {
+      {% if ldap_module.ldap_tls_enable %}
+
+      {% for key, value in ldap_module.ldap_tls.items() %}
+      {{ key }} = {{ value }}
+      {% endfor %}
+      {% endif %}
+      
+      {% raw %}
+  #    start_tls = yes
+  #    ca_file  = ${certdir}/cacert.pem
+  #    ca_path  = ${certdir}
+  #    certificate_file = /path/to/radius.crt
+  #    private_key_file = /path/to/radius.key
+  #    random_file = /dev/urandom
+  #    require_cert  = 'demand'
+      {% endraw %}
+    }
+
+    pool {
+      start = {% raw %}${thread[pool].start_servers}{% endraw %}
+
+      #  Minimum number of connections to keep open
+      min = {% raw %}${thread[pool].min_spare_servers}{% endraw %}
+
+      max = {% raw %}${thread[pool].max_servers}{% endraw %}
+
+      spare = {% raw %}${thread[pool].max_spare_servers}{% endraw %}
+
+      uses = 0
+      retry_delay = 30
+      lifetime = 0
+      idle_timeout = 60
+    }
+  }
+
+{% endfor %}
+{% endif %}
