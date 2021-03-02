@@ -1,8 +1,6 @@
 ansible-freeradius3
 =========
 
-[![pipeline status](https://gitlab.tools.in.pan-net.eu/ansible-roles/ansible-freeradius3/badges/master/pipeline.svg)](https://gitlab.tools.in.pan-net.eu/ansible-roles/ansible-freeradius3/commits/master)  
-
 This role will install FreeRADIUS 3.0.x (currently 3.0.15). The default role variables will result in the official default FreeRADIUS installation.  
 Role is flexible, so you can setup your own virtual server, OTP REST API client, LDAP modules, etc. using already prepared variables.
 
